@@ -1,0 +1,18 @@
+#
+# Sample config file for open-tunnel
+#
+
+# Username on remote SSH server
+MY_USER="ec2-user"
+
+# Port of remote SSH server
+MY_REMOTE_PORT=22
+
+# Local port to allow forwarding to remote
+MY_DYNAMIC_PORT=9000
+
+# Hostname for remote SSH server
+MY_IDENTITY_FILE=~/.ssh/aws-useast1-maxwell.pem
+
+# Misc SSH parameters desired for this connection
+MY_SSH_PARAMETERS="-o ServerAliveCountMax=4 -o ServerAliveInterval=240 -o IdentitiesOnly=yes -o LogLevel=Verbose"

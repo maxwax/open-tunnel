@@ -1,0 +1,221 @@
+#!/bin/bash
+
+#
+# Establish an SSH session with a remote bastion and enable dynamic port
+# forwarding from the local workstation through the bastion to the remote network
+#
+# Use config files and command line parameters to be flexible but ultimately
+# user friendly so the user can just 'open-tunnel <hostname>'
+#
+# July 2021 maxcode@maxwellspangler.com
+#
+
+function usage {
+  echo "open-tunnel - Open an SSH tunnel to a remote bastion"
+  echo
+  echo "open-tunnel [-c config_file_id] [-p port] [-u user] [-f forward_port] [-d] [-i identity_file] <hostname>"
+  echo
+  echo "-c : Config file identifier, example: $HOME/.open-tunnel-<identifier>.conf"
+  echo "-p : Remote SSH server port"
+  echo "-u : Remote SSH user name"
+  echo "-f : Forward traffic on local port number to remote SSH server"
+  echo "-i : SSH identity file in $HOME/.ssh"
+  echo "<hostname> : hostname of remote SSH bastion server"
+  echo
+  echo "Example:"
+  echo "open-tunnel -p 22 -f 9998 -u ec2-user -i aws-east ec2-18-117-101-218.us-east-2.compute.amazonaws.com"
+  echo
+  echo "A default config file, $HOME/.open-tunnel-default.conf is read first"
+  echo "The user can then replace values with -c <config_file> to use a custom"
+  echo "config file, AND/OR replace values with command line parameters."
+  echo
+  echo "Values are replaced in the order supplied on the command line."
+  echo
+}
+
+# Global defaults
+
+# These are valid within a config file
+export MY_USER="ec2-user"
+export MY_REMOTE_PORT=22
+export MY_FORWARD_PORT=9000
+export MY_IDENTITY_FILE="_null"
+export MY_REMOTE_HOSTNAME="_null"
+export MY_SSH_PARAMETERS="-o ServerAliveCountMax=4 -o ServerAliveInterval=240 -o IdentitiesOnly=yes -o LogLevel=Verbose"
+
+# This is not valid within a config file
+MY_CONFIG_FILE="_null"
+
+# Internal variables
+CONFIG_FILE_PREFIX=".open-tunnel-"
+CONFIG_FILE_SUFFIX=".conf"
+CONFIG_FILE_DEFAULT="${CONFIG_FILE_PREFIX}default${CONFIG_FILE_SUFFIX}"
+
+function validate_config_file {
+  if [[ ! -r "$HOME/$MY_CONFIG_FILE" ]]
+  then
+    echo "Error: Config file $MY_CONFIG_FILE cannot be read."
+    exit 1
+  fi
+}
+
+# Read a default config file if one exists
+# This lets the most commonly used CLI parameters be loaded with no
+# effort for the user and the user can 'open-tunnel <host>' in most cases.
+if [[ -r $CONFIG_FILE_DEFAULT ]]
+then
+  . $HOME/$CONFIG_FILE_DEFAULT
+fi
+
+# You have to issue '$ export DEBUG=true; open-tunnel...' to see this info
+if [[ $DEBUG == true ]]
+then
+  echo "After default config file import"
+  echo "MY_USER |$MY_USER|"
+  echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
+  echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
+  echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
+  echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
+  echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
+  echo
+fi
+
+# Parameter handling
+while [[ $# -gt 0 ]]
+do
+
+  case "$1" in
+
+    # Specify a unique config file for this program
+    "-c"|"--config")
+      shift
+      MY_CONFIG_FILE="${CONFIG_FILE_PREFIX}${1}${CONFIG_FILE_SUFFIX}"
+      shift
+
+      validate_config_file $MY_CONFIG_FILE
+      if [[ $DEBUG == true ]]
+      then
+        echo "Reading user-specified config file $MY_CONFIG_FILE"
+      fi
+      . $HOME/$MY_CONFIG_FILE
+    ;;
+
+    "-h"|"-help"|"--help"|"help")
+      usage
+      exit 0
+    ;;
+
+    # Specify a user on the remote SSH server
+    "-u"|"--user")
+      shift
+      MY_USER=$1
+      shift
+    ;;
+
+    # Specify a local dynamic port for forwarding traffic
+    "-f"|"--forward")
+      shift
+      MY_FORWARD_PORT=$1
+      shift
+    ;;
+
+    # Specify a remote port for the SSH server
+    "-p"|"--port")
+      shift
+      MY_REMOTE_PORT=$1
+      shift
+    ;;
+
+    # Specify an SSH identity file in $HOME/.ssh
+    "-i"|"--identity"|"--identityfile")
+      shift
+      MY_IDENTITY_FILE=$1
+      shift
+    ;;
+
+    # List config files
+    "--list"|"-l"|"list")
+      ls -1 $HOME/${CONFIG_FILE_PREFIX}*${CONFIG_FILE_SUFFIX}
+      exit 0
+    ;;
+
+    # Enable debug mode
+    "--debug"|"-d")
+      DEBUG=true
+      shift
+    ;;
+
+    # Last parameter is host name
+    *)
+      MY_REMOTE_HOSTNAME=$1
+      shift
+    ;;
+
+  esac
+done
+
+if [[ $DEBUG == true ]]
+then
+  echo "After parameter handling"
+  echo "MY_USER |$MY_USER|"
+  echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
+  echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
+  echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
+  echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
+  echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
+  echo
+fi
+
+if [[ $MY_REMOTE_HOSTNAME == "_null" ]]
+then
+  echo "Error: No hostname specified."
+  echo
+  usage
+  exit 1
+else
+
+  # Construct an SSH string with parameters
+  SSH_STRING=""
+
+  if [[ -n $MY_USER ]] && [[ $MY_USER != "_null" ]]
+  then
+    SSH_STRING="$SSH_STRING -l $MY_USER"
+  fi
+
+  if [[ -n $MY_REMOTE_PORT ]] && [[ $MY_REMOTE_PORT != "_null" ]]
+  then
+    SSH_STRING="$SSH_STRING -p $MY_REMOTE_PORT"
+  fi
+
+  if [[ -n $MY_FORWARD_PORT ]] && [[ $MY_FORWARD_PORT != "_null" ]]
+  then
+    SSH_STRING="$SSH_STRING -D $MY_FORWARD_PORT"
+  fi
+
+  if [[ -n $MY_IDENTITY_FILE ]] && [[ $MY_IDENTITY_FILE != "_null" ]]
+  then
+    SSH_STRING="$SSH_STRING -i $MY_IDENTITY_FILE"
+  fi
+
+  if [[ -n $MY_SSH_PARAMETERS ]] && [[ $MY_SSH_PARAMETERS != "_null" ]]
+  then
+    SSH_STRING="$SSH_STRING $MY_SSH_PARAMETERS"
+  fi
+
+  SSH_STRING="$SSH_STRING $MY_REMOTE_HOSTNAME"
+
+  echo
+
+  if [[ $DEBUG == true ]]
+  then
+    set -x
+  fi
+
+  ssh $SSH_STRING
+
+  if [[ $DEBUG == true ]]
+  then
+    set +x
+  fi
+
+fi
