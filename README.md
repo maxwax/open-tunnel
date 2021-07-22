@@ -29,6 +29,26 @@ The user can opt to:
 
 This allows the possibility that common defaults could be read from the default file, then the '-c' parameter replaces some or all of those values with those from a different config file and finally individual CLI parameters replace those values.  The flexibility is there if you need it, but normally, setup a default config file, use that and just name the remote host.
 
+## Config files
+
+The config files are snippets of bash code that is imported and executed inline with the main script.
+
+A typical config file simply sets one or more values like this:
+
+```
+# Username on remote SSH server
+MY_USER="ec2-user"
+
+# Port of remote SSH server
+MY_REMOTE_PORT=22
+```
+
+See the sample config file for names of variables and documentation on their use.
+
+A default config file, $HOME/.open-tunnel-default.conf is always loaded if it is present and readable.
+
+Users may also use the '--config' parameter to import a custom config file by providing an identifier.
+
 ## Command line options
 
 ### Syntax
