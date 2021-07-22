@@ -13,20 +13,20 @@
 function usage {
   echo "open-tunnel - Open an SSH tunnel to a remote bastion"
   echo
-  echo "open-tunnel [-c config_file_id] [-p port] [-u user] [-f forward_port] [-d] [-i identity_file] <hostname>"
+  echo "open-tunnel [--config config_file_id] [--port port] [--login user] [--forward forward_port] [--debug] [--identity identity_file] <hostname>"
   echo
-  echo "-c : Config file identifier, example: $HOME/.open-tunnel-<identifier>.conf"
-  echo "-p : Remote SSH server port"
-  echo "-u : Remote SSH user name"
-  echo "-f : Forward traffic on local port number to remote SSH server"
-  echo "-i : SSH identity file in $HOME/.ssh"
+  echo "--config : Config file identifier, example: $HOME/.open-tunnel-<identifier>.conf"
+  echo "--port : Remote SSH server port"
+  echo "--login : Remote SSH user name"
+  echo "--forward : Forward traffic on local port number to remote SSH server"
+  echo "--identity : SSH identity file in $HOME/.ssh"
   echo "<hostname> : hostname of remote SSH bastion server"
   echo
   echo "Example:"
-  echo "open-tunnel -p 22 -f 9998 -u ec2-user -i aws-east ec2-18-117-101-218.us-east-2.compute.amazonaws.com"
+  echo "open-tunnel --port 22 --forward 9998 --user ec2-user --identity aws-east ec2-18-117-101-218.us-east-2.compute.amazonaws.com"
   echo
   echo "A default config file, $HOME/.open-tunnel-default.conf is read first"
-  echo "The user can then replace values with -c <config_file> to use a custom"
+  echo "The user can then replace values with --config <config_file> to use a custom"
   echo "config file, AND/OR replace values with command line parameters."
   echo
   echo "Values are replaced in the order supplied on the command line."
@@ -36,7 +36,7 @@ function usage {
 # Global defaults
 
 # These are valid within a config file
-export MY_USER="ec2-user"
+export MY_LOGIN="ec2-user"
 export MY_REMOTE_PORT=22
 export MY_FORWARD_PORT=9000
 export MY_IDENTITY_FILE="_null"
@@ -49,7 +49,7 @@ MY_CONFIG_FILE="_null"
 # Internal variables
 CONFIG_FILE_PREFIX=".open-tunnel-"
 CONFIG_FILE_SUFFIX=".conf"
-CONFIG_FILE_DEFAULT="${CONFIG_FILE_PREFIX}default${CONFIG_FILE_SUFFIX}"
+CONFIG_FILE_DEFAULT="$HOME/${CONFIG_FILE_PREFIX}default${CONFIG_FILE_SUFFIX}"
 
 function validate_config_file {
   if [[ ! -r "$HOME/$MY_CONFIG_FILE" ]]
@@ -62,19 +62,21 @@ function validate_config_file {
 # Read a default config file if one exists
 # This lets the most commonly used CLI parameters be loaded with no
 # effort for the user and the user can 'open-tunnel <host>' in most cases.
+
 if [[ -r $CONFIG_FILE_DEFAULT ]]
 then
-  . $HOME/$CONFIG_FILE_DEFAULT
+  . $CONFIG_FILE_DEFAULT
 fi
 
 # You have to issue '$ export DEBUG=true; open-tunnel...' to see this info
 if [[ $DEBUG == true ]]
 then
   echo "After default config file import"
-  echo "MY_USER |$MY_USER|"
+  echo "MY_LOGIN |$MY_LOGIN|"
   echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
   echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
   echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
+  echo "MY_SSH_PARAMETERS|$MY_SSH_PARAMETERS|"
   echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
   echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
   echo
@@ -108,7 +110,7 @@ do
     # Specify a user on the remote SSH server
     "-u"|"--user")
       shift
-      MY_USER=$1
+      MY_LOGIN=$1
       shift
     ;;
 
@@ -157,10 +159,11 @@ done
 if [[ $DEBUG == true ]]
 then
   echo "After parameter handling"
-  echo "MY_USER |$MY_USER|"
+  echo "MY_LOGIN |$MY_LOGIN|"
   echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
   echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
   echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
+  echo "MY_SSH_PARAMETERS|$MY_SSH_PARAMETERS|"
   echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
   echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
   echo
@@ -177,9 +180,9 @@ else
   # Construct an SSH string with parameters
   SSH_STRING=""
 
-  if [[ -n $MY_USER ]] && [[ $MY_USER != "_null" ]]
+  if [[ -n $MY_LOGIN ]] && [[ $MY_LOGIN != "_null" ]]
   then
-    SSH_STRING="$SSH_STRING -l $MY_USER"
+    SSH_STRING="$SSH_STRING -l $MY_LOGIN"
   fi
 
   if [[ -n $MY_REMOTE_PORT ]] && [[ $MY_REMOTE_PORT != "_null" ]]
