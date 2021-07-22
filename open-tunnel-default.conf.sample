@@ -3,7 +3,7 @@
 #
 
 # Username on remote SSH server
-MY_USER="ec2-user"
+MY_LOGIN="ec2-user"
 
 # Port of remote SSH server
 MY_REMOTE_PORT=22
