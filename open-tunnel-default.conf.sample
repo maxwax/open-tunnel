@@ -8,10 +8,10 @@ MY_USER="ec2-user"
 # Port of remote SSH server
 MY_REMOTE_PORT=22
 
-# Local port to allow forwarding to remote
-MY_DYNAMIC_PORT=9000
+# Port number on local system that dynamically forwards traffic to remote server
+MY_FORWARD_PORT=9000
 
-# Hostname for remote SSH server
+# SSH key file used to authenticate with the remote SSH server
 MY_IDENTITY_FILE=~/.ssh/aws-useast1-maxwell.pem
 
 # Misc SSH parameters desired for this connection
