@@ -1,5 +1,9 @@
 # CHANGLOG for 'open-tunnel/open-terminal' script
 
+## 0.9.1 Reworked as open-tunnel/tunnel-terminal
+
+* Renaming open-tunnel as tunnel-terminal because open-terminal sounds universal and this script is really only for establishing SSH connections *through a tunnel*
+
 ## 0.9 Reworked as open-tunnel/open-terminal
 
 * Major modifications so this script can be used as open-tunnel or open-terminal

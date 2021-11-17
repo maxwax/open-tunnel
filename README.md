@@ -1,8 +1,9 @@
-# open-tunnel
+# open-tunnel / tunnel-terminal
+
 This is a single bash script that can be used in two complimentary ways:
 
 * When called as 'open-tunnel' it creates an SSH session on a remote bastion node and opens a tunnel to the bastion's private network resources.
-* When called as 'open-terminal' it creates an SSH session through the remote bastion's tunnel to private network resources
+* When called as 'tunnel-terminal' it creates an SSH session through the remote bastion's tunnel to private network resources
 
 This allows one script to construct either type of SSH connection and establish it.  It's a lot less work than having to maintain two scripts doing nearly the same thing.
 
@@ -17,14 +18,14 @@ $ open-tunnel aws-east ec2-11-222-33-44.us-east-2.compute.amazonaws.com
 Second, connect through the tunnel to an instance on the private side of the bastion:
 
 ```
-$ open-terminal ip-10-99-10-99.us-east-2.compute.internal
+$ tunnel-terminal ip-10-99-10-99.us-east-2.compute.internal
 ```
 
 If you have a bastion that is always up with a static IP, you don't need open-tunnel: You could just configure the bastion with options in your $HOME/.ssh/config file.  But since my bastion's are in AWS, are they stopped and started regularly, their public DNS name changes each time. So 'open-tunnel <hostname>' lets me connect to it without updating my SSH config file.. AGAIN.
 
 ## Deployment
 
-A simple install.sh script is provided to copy the script to /usr/local/bin/open-tunnel.  It also creates a symlink as /usr/local/bin/open-terminal that points to /usr/local/open-tunnel.  One script, called two different ways.
+A simple install.sh script is provided to copy the script to /usr/local/bin/open-tunnel.  It also creates a symlink as /usr/local/bin/tunnel-terminal that points to /usr/local/open-tunnel.  One script, called two different ways.
 
 ## Operation
 
@@ -66,7 +67,7 @@ Users may also use the '--config' parameter to import a custom config file by pr
 
 ```
 open-tunnel [options] <hostname>
-open-terminal [options] <hostname>
+tunnel-terminal [options] <hostname>
 
 open-tunnel [--config <config_file_id>] [--port <port>] [--login <user>] [--tunnel <tunnel_port_number>] [--debug] [--identity <identity_file_name>] <remote_hostname>
 ```
@@ -90,7 +91,7 @@ Connect to the remote host with this user name.
 #### -t | --tunnel <tunnel_port_number>
 
 With open-tunnel: create a tunnel on the local workstation on this port and listen for incoming traffic.
-With open-terminal: Tunnel connections through this port on the local workstation's localhost interface which tunnels it through the remote bastion to private networks.
+With tunnel-terminal: Tunnel connections through this port on the local workstation's localhost interface which tunnels it through the remote bastion to private networks.
 
 #### -i | --identity <identity_filename>
 
@@ -130,11 +131,11 @@ $ open-tunnel --login myuser --port 8022 --tunnel 9000 my-bastion-node.maxlab
 
 With the first bastion example above connected, lets tunnel through it to connect to a database instance in an AWS cloud private subnet:
 ```
-$ open-terminal ip-10-100-10-100.us-east-2.compute.internal
+$ tunnel-terminal ip-10-100-10-100.us-east-2.compute.internal
 ```
 
 Lets do the same, but for a node in ireland?  All the special parameters for that region's nodes are in a config file, so just load it and go.
 
 ```
-$ open-terminal --config ireland ip-10-100-10-100.us-east-2.compute.internal
+$ tunnel-terminal --config ireland ip-10-100-10-100.us-east-2.compute.internal
 ```

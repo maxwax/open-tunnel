@@ -2,26 +2,26 @@
 
 # Establish an SSH connection to a remote that does either:
 #
-#   open-tunnel   - connect to remote bastion and create tunnel on it
-#   open-terminal - connect to remote private instance through a tunnel
+#   open-tunnel     - connect to remote bastion and create tunnel on it
+#   tunnel-terminal - connect to remote private instance through a tunnel
 #
 # Both types of SSH connections are nearly the same, so why not have one
 # script which constructs an SSH command for either and executes it?
 #
-# That's open-tunnel/open-terminal.
+# That's open-tunnel/tunnel-terminal.
 #
 # July 2021 maxcode@maxwellspangler.com
 #
 
 function usage {
   echo "open-tunnel   - Connect to a remote bastion and create a tunnel on it"
-  echo "open-terminal - Connect to a remote private instance through a tunnel"
+  echo "tunnel-terminal - Connect to a remote private instance through a tunnel"
   echo
-  echo "open-tunnel   [options] <hostname>"
-  echo "open-terminal [options] <hostname>"
+  echo "open-tunnel     [options] <hostname>"
+  echo "tunnel-terminal [options] <hostname>"
   echo
   echo "This script's behavior changes depending how the script is called"
-  echo "open-tunnel or open-terminal."
+  echo "open-tunnel or tunnel-terminal."
   echo
   echo "Default values from $HOME/.open-tunnel-default.conf are loaded first"
   echo "then overridden by optional config file values using --config and/or"
@@ -44,13 +44,13 @@ function usage {
   echo "  Create or use a proxy tunnel on this localhost port"
   echo
   echo "--proxy-program <nmap-ncat|netcat>"
-  echo "  Use nmap-ncat or netcat with SSH to use a proxy tunnel (open-terminal)"
+  echo "  Use nmap-ncat or netcat with SSH to use a proxy tunnel (tunnel-terminal)"
   echo
   echo "--tunnel-parameters \"parameter string\""
   echo "  Optional SSH -o parameters in a quoted string for open-tunnel"
   echo
   echo "--terminal-parameters \"parameter string\""
-  echo "  Optional SSH -o parameters in a quoted string for open-terminal"
+  echo "  Optional SSH -o parameters in a quoted string for tunnel-terminal"
   echo
   echo "--debug"
   echo "  Enable debugging"
@@ -58,7 +58,7 @@ function usage {
   echo "Examples:"
   echo "open-tunnel --port 22 --forward 9998 --user ec2-user --identity aws-east ec2-99-117-101-218.us-east-2.compute.amazonaws.com"
   echo
-  echo "open-terminal --config ohio ec2-99-117-101-218.us-east-2.compute.amazonaws.com"
+  echo "tunnel-terminal --config ohio ec2-99-117-101-218.us-east-2.compute.amazonaws.com"
   echo
 }
 
@@ -138,13 +138,13 @@ export MY_IDENTITY_FILE=""
 export MY_TUNNEL_SSH_PARAMETERS=""
 export MY_PROXY_PROGRAM="ncat-nmap"
 
-# Are we using open-tunnel or open-terminal?
+# Are we using open-tunnel or tunnel-terminal?
 CALLED_PROGRAM=$(basename "$0")
 if [[ $CALLED_PROGRAM == "open-tunnel" ]]
 then
   THIS_PROGRAM="open-tunnel"
 else
-  THIS_PROGRAM="open-terminal"
+  THIS_PROGRAM="tunnel-terminal"
 fi
 
 # Will ultimately contain our constructed SSH command
@@ -303,7 +303,7 @@ else
   # Options for remote TERMINALS only
   #
 
-  elif [[ $THIS_PROGRAM == "open-terminal" ]]
+  elif [[ $THIS_PROGRAM == "tunnel-terminal" ]]
   then
 
     validate_proxy_port $MY_PROXY_TUNNEL_PORT
