@@ -1,4 +1,14 @@
-# CHANGLOG for 'open-tunnel' script
+# CHANGLOG for 'open-tunnel/open-terminal' script
+
+## 0.9 Reworked as open-tunnel/open-terminal
+
+* Major modifications so this script can be used as open-tunnel or open-terminal
+* When called natively as open-tunnel it creates an SSH connection to a bastion and opens a tunnel on it
+* When called as open-terminal (symlinked to open-tunnel) it creates an SSH connection through the tunnel to remote private instances
+
+* Modify install.sh to create an open-terminal symlink to open-tunnel
+* execute ssh via 'eval ssh...' in order to work around Bash expansion/evaluation of quotes within strings.
+* Updated documentation
 
 ## 0.2 Initial Release
 

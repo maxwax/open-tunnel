@@ -1,57 +1,69 @@
 #!/bin/bash
 
+# Establish an SSH connection to a remote that does either:
 #
-# Establish an SSH session with a remote bastion and enable dynamic port
-# forwarding from the local workstation through the bastion to the remote network
+#   open-tunnel   - connect to remote bastion and create tunnel on it
+#   open-terminal - connect to remote private instance through a tunnel
 #
-# Use config files and command line parameters to be flexible but ultimately
-# user friendly so the user can just 'open-tunnel <hostname>'
+# Both types of SSH connections are nearly the same, so why not have one
+# script which constructs an SSH command for either and executes it?
+#
+# That's open-tunnel/open-terminal.
 #
 # July 2021 maxcode@maxwellspangler.com
 #
 
 function usage {
-  echo "open-tunnel - Open an SSH tunnel to a remote bastion"
+  echo "open-tunnel   - Connect to a remote bastion and create a tunnel on it"
+  echo "open-terminal - Connect to a remote private instance through a tunnel"
   echo
-  echo "open-tunnel [--config config_file_id] [--port port] [--login user] [--forward forward_port] [--debug] [--identity identity_file] <hostname>"
+  echo "open-tunnel   [options] <hostname>"
+  echo "open-terminal [options] <hostname>"
   echo
-  echo "--config : Config file identifier, example: $HOME/.open-tunnel-<identifier>.conf"
-  echo "--port : Remote SSH server port"
-  echo "--login : Remote SSH user name"
-  echo "--forward : Forward traffic on local port number to remote SSH server"
-  echo "--identity : SSH identity file in $HOME/.ssh"
-  echo "<hostname> : hostname of remote SSH bastion server"
+  echo "This script's behavior changes depending how the script is called"
+  echo "open-tunnel or open-terminal."
   echo
-  echo "Example:"
-  echo "open-tunnel --port 22 --forward 9998 --user ec2-user --identity aws-east ec2-18-117-101-218.us-east-2.compute.amazonaws.com"
+  echo "Default values from $HOME/.open-tunnel-default.conf are loaded first"
+  echo "then overridden by optional config file values using --config and/or"
+  echo "parameters listed here."
   echo
-  echo "A default config file, $HOME/.open-tunnel-default.conf is read first"
-  echo "The user can then replace values with --config <config_file> to use a custom"
-  echo "config file, AND/OR replace values with command line parameters."
+  echo "Options:"
+  echo "--config config_file_id"
+  echo "  Apply values from this optional config file"
   echo
-  echo "Values are replaced in the order supplied on the command line."
+  echo "--identity identity_file <hostname>"
+  echo "  Authenticate with this SSH key file in $HOME/.ssh"
+  echo
+  echo "--port <remote_port_number>"
+  echo "  Connect to the remote host on this port"
+  echo
+  echo "--login <username>"
+  echo "  Authenticate with this remote user name"
+  echo
+  echo "--tunnel <tunnel_port_number>"
+  echo "  Create or use a proxy tunnel on this localhost port"
+  echo
+  echo "--proxy-program <nmap-ncat|netcat>"
+  echo "  Use nmap-ncat or netcat with SSH to use a proxy tunnel (open-terminal)"
+  echo
+  echo "--tunnel-parameters \"parameter string\""
+  echo "  Optional SSH -o parameters in a quoted string for open-tunnel"
+  echo
+  echo "--terminal-parameters \"parameter string\""
+  echo "  Optional SSH -o parameters in a quoted string for open-terminal"
+  echo
+  echo "--debug"
+  echo "  Enable debugging"
+  echo
+  echo "Examples:"
+  echo "open-tunnel --port 22 --forward 9998 --user ec2-user --identity aws-east ec2-99-117-101-218.us-east-2.compute.amazonaws.com"
+  echo
+  echo "open-terminal --config ohio ec2-99-117-101-218.us-east-2.compute.amazonaws.com"
   echo
 }
 
-# Global defaults
-
-# These are valid within a config file
-export MY_LOGIN="ec2-user"
-export MY_REMOTE_PORT=22
-export MY_FORWARD_PORT=9000
-export MY_IDENTITY_FILE="_null"
-export MY_REMOTE_HOSTNAME="_null"
-export MY_SSH_PARAMETERS="-o ServerAliveCountMax=4 -o ServerAliveInterval=240 -o IdentitiesOnly=yes -o LogLevel=Verbose"
-
-# This is not valid within a config file
-MY_CONFIG_FILE="_null"
-
-# Internal variables
-CONFIG_FILE_PREFIX=".open-tunnel-"
-CONFIG_FILE_SUFFIX=".conf"
-CONFIG_FILE_DEFAULT="$HOME/${CONFIG_FILE_PREFIX}default${CONFIG_FILE_SUFFIX}"
-
-function validate_config_file {
+# Verify that a config file exists
+function verify_config_file {
   if [[ ! -r "$HOME/$MY_CONFIG_FILE" ]]
   then
     echo "Error: Config file $MY_CONFIG_FILE cannot be read."
@@ -62,25 +74,93 @@ function validate_config_file {
 # Read a default config file if one exists
 # This lets the most commonly used CLI parameters be loaded with no
 # effort for the user and the user can 'open-tunnel <host>' in most cases.
+function load_default_config {
+  if [[ -r $CONFIG_FILE_DEFAULT ]]
+  then
+    . $CONFIG_FILE_DEFAULT
+  fi
+}
 
-if [[ -r $CONFIG_FILE_DEFAULT ]]
+function print_variables_if_debug_mode {
+  if [[ $DEBUG == true ]]
+  then
+    echo "$1 variables are:"
+    echo "MY_CONFIG_FILE             |$MY_CONFIG_FILE|"
+    echo "MY_LOGIN                   |$MY_LOGIN|"
+    echo "MY_REMOTE_PORT             |$MY_REMOTE_PORT|"
+    echo "MY_REMOTE_HOSTNAME         |$MY_REMOTE_HOSTNAME|"
+    echo "MY_IDENTITY_FILE           |$MY_IDENTITY_FILE|"
+    echo "MY_PROXY_TUNNEL_PORT       |$MY_PROXY_TUNNEL_PORT|"
+    echo "MY_TUNNEL_SSH_PARAMETERS   |$MY_TUNNEL_SSH_PARAMETERS|"
+    echo "MY_TERMINAL_SSH_PARAMETERS |$MY_TERMINAL_SSH_PARAMETERS|"
+    echo "MY_PROXY_PROGRAM           |$MY_PROXY_PROGRAM|"
+    echo
+    echo "THIS_PROGRAM               |$THIS_PROGRAM|"
+    echo
+    echo "SSH_STRING                 |$SSH_STRING|"
+    echo "----"
+  fi
+}
+
+function validate_proxy_port {
+  # Validate that our tunnel proxy value is good - can't tunnel without it
+  if [[ -z $MY_PROXY_TUNNEL_PORT ]] || \
+     [[ $MY_PROXY_TUNNEL_PORT == "_null" ]] || \
+     [[ $MY_PROXY_TUNNEL_PORT -le 0 ]] || \
+     [[ $MY_PROXY_TUNNEL_PORT -gt 65535 ]]
+  then
+
+    echo "ERROR: You must specify a valid tunnel port in order to SSH through one."
+    echo "       Value if \$MY_PROXY_TUNNEL_PORT is |$MY_PROXY_TUNNEL_PORT|"
+    if [[ -z "$MY_PROXY_TUNNEL_PORT" ]]
+    then
+      echo "       Value is empty"
+    elif [[ $MY_PROXY_TUNNEL_PORT == "_null" ]]
+    then
+      echo "       Value is set to null value"
+    elif [[ $MY_PROXY_TUNNEL_PORT -le 0 ]]
+    then
+      echo "       Value is too low: less than or equal to 0"
+    elif [[ $MY_PROXY_TUNNEL_PORT -gt 65535 ]]
+    then
+      echo "       Value is too high: Greater than 65535"
+    fi
+    exit 1
+  fi
+}
+
+# Global defaults with defaults
+export MY_LOGIN="_null"
+export MY_REMOTE_HOSTNAME="_null"
+export MY_REMOTE_PORT=22
+export MY_PROXY_TUNNEL_PORT=9000
+export MY_IDENTITY_FILE=""
+export MY_TUNNEL_SSH_PARAMETERS=""
+export MY_PROXY_PROGRAM="ncat-nmap"
+
+# Are we using open-tunnel or open-terminal?
+CALLED_PROGRAM=$(basename "$0")
+if [[ $CALLED_PROGRAM == "open-tunnel" ]]
 then
-  . $CONFIG_FILE_DEFAULT
+  THIS_PROGRAM="open-tunnel"
+else
+  THIS_PROGRAM="open-terminal"
 fi
 
-# You have to issue '$ export DEBUG=true; open-tunnel...' to see this info
-if [[ $DEBUG == true ]]
-then
-  echo "After default config file import"
-  echo "MY_LOGIN |$MY_LOGIN|"
-  echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
-  echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
-  echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
-  echo "MY_SSH_PARAMETERS|$MY_SSH_PARAMETERS|"
-  echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
-  echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
-  echo
-fi
+# Will ultimately contain our constructed SSH command
+SSH_STRING=""
+
+# This is not valid within a config file
+MY_CONFIG_FILE="_null"
+
+# Internal variables
+CONFIG_FILE_PREFIX=".open-tunnel-"
+CONFIG_FILE_SUFFIX=".conf"
+CONFIG_FILE_DEFAULT="$HOME/.open-tunnel-default.conf"
+
+MY_REMOTE_HOSTNAME="_null"
+
+load_default_config
 
 # Parameter handling
 while [[ $# -gt 0 ]]
@@ -88,18 +168,14 @@ do
 
   case "$1" in
 
-    # Specify a unique config file for this program
     "-c"|"--config")
       shift
       MY_CONFIG_FILE="${CONFIG_FILE_PREFIX}${1}${CONFIG_FILE_SUFFIX}"
       shift
 
-      validate_config_file $MY_CONFIG_FILE
-      if [[ $DEBUG == true ]]
-      then
-        echo "Reading user-specified config file $MY_CONFIG_FILE"
-      fi
+      verify_config_file $MY_CONFIG_FILE
       . $HOME/$MY_CONFIG_FILE
+      print_variables_if_debug_mode "After-config-file-$MY_CONFIG_FILE"
     ;;
 
     "-h"|"-help"|"--help"|"help")
@@ -108,16 +184,16 @@ do
     ;;
 
     # Specify a user on the remote SSH server
-    "-u"|"--user")
+    "-l"|"--login")
       shift
       MY_LOGIN=$1
       shift
     ;;
 
     # Specify a local dynamic port for forwarding traffic
-    "-f"|"--forward")
+    "-t"|"--tunnel")
       shift
-      MY_FORWARD_PORT=$1
+      MY_PROXY_TUNNEL_PORT=$1
       shift
     ;;
 
@@ -135,8 +211,15 @@ do
       shift
     ;;
 
+    # Specify an SSH identity file in $HOME/.ssh
+    "--proxy-program"|"--program")
+      shift
+      MY_PROXY_PROGRAM=$1
+      shift
+    ;;
+
     # List config files
-    "--list"|"-l"|"list")
+    "--list")
       ls -1 $HOME/${CONFIG_FILE_PREFIX}*${CONFIG_FILE_SUFFIX}
       exit 0
     ;;
@@ -156,22 +239,11 @@ do
   esac
 done
 
-if [[ $DEBUG == true ]]
-then
-  echo "After parameter handling"
-  echo "MY_LOGIN |$MY_LOGIN|"
-  echo "MY_REMOTE_PORT |$MY_REMOTE_PORT|"
-  echo "MY_FORWARD_PORT |$MY_FORWARD_PORT|"
-  echo "MY_IDENTITY_FILE|$MY_IDENTITY_FILE|"
-  echo "MY_SSH_PARAMETERS|$MY_SSH_PARAMETERS|"
-  echo "MY_CONFIG_FILE|$MY_CONFIG_FILE|"
-  echo "MY_REMOTE_HOSTNAME |$MY_REMOTE_HOSTNAME|"
-  echo
-fi
+print_variables_if_debug_mode "After parameter processing"
 
 if [[ $MY_REMOTE_HOSTNAME == "_null" ]]
 then
-  echo "Error: No hostname specified."
+  echo "ERROR: No hostname specified as last argument on command line"
   echo
   usage
   exit 1
@@ -179,6 +251,8 @@ else
 
   # Construct an SSH string with parameters
   SSH_STRING=""
+  # Construction that applies to either an
+  # SSH session launching a tunnel or a terminal.
 
   if [[ -n $MY_LOGIN ]] && [[ $MY_LOGIN != "_null" ]]
   then
@@ -190,31 +264,90 @@ else
     SSH_STRING="$SSH_STRING -p $MY_REMOTE_PORT"
   fi
 
-  if [[ -n $MY_FORWARD_PORT ]] && [[ $MY_FORWARD_PORT != "_null" ]]
-  then
-    SSH_STRING="$SSH_STRING -D $MY_FORWARD_PORT"
-  fi
-
   if [[ -n $MY_IDENTITY_FILE ]] && [[ $MY_IDENTITY_FILE != "_null" ]]
   then
-    SSH_STRING="$SSH_STRING -i $MY_IDENTITY_FILE"
+    if [[ ! -r $MY_IDENTITY_FILE ]]
+    then
+      if [[ ! -f $MY_IDENTITY_FILE ]]
+      then
+        echo "Error: Identity file $MY_IDENTITY_FILE does not exist."
+      else
+        echo "Error: Identity file $MY_IDENTITY_FILE exists but is not readable."
+      fi
+    else
+      SSH_STRING="$SSH_STRING -i $MY_IDENTITY_FILE"
+    fi
   fi
 
-  if [[ -n $MY_SSH_PARAMETERS ]] && [[ $MY_SSH_PARAMETERS != "_null" ]]
+  #
+  # Options for TUNNELS only
+  #
+
+  if [[ $THIS_PROGRAM == "open-tunnel" ]]
   then
-    SSH_STRING="$SSH_STRING $MY_SSH_PARAMETERS"
+
+    # Only construct this if we're creating a new proxy tunnel
+    if [[ -n $MY_PROXY_TUNNEL_PORT ]] && [[ $MY_PROXY_TUNNEL_PORT != "_null" ]]
+    then
+      validate_proxy_port $MY_PROXY_TUNNEL_PORT
+
+      SSH_STRING="$SSH_STRING -D $MY_PROXY_TUNNEL_PORT"
+    fi
+
+    if [[ -n $MY_TUNNEL_SSH_PARAMETERS ]] && [[ $MY_TUNNEL_SSH_PARAMETERS != "_null" ]]
+    then
+      SSH_STRING="$SSH_STRING $MY_TUNNEL_SSH_PARAMETERS"
+    fi
+
+  #
+  # Options for remote TERMINALS only
+  #
+
+  elif [[ $THIS_PROGRAM == "open-terminal" ]]
+  then
+
+    validate_proxy_port $MY_PROXY_TUNNEL_PORT
+
+    if [[ -n $MY_TERMINAL_SSH_PARAMETERS ]] && [[ $MY_TERMINAL_SSH_PARAMETERS != "_null" ]]
+    then
+      SSH_STRING="$SSH_STRING $MY_TERMINAL_SSH_PARAMETERS"
+    fi
+
+    if [[ $MY_PROXY_PROGRAM == "netcat" ]]
+    then
+      # This version uses OpenBSD netcat, work-around for nmap-ncat issues
+      # ssh -i $SSH_FILENAME \
+      #   -o IdentitiesOnly=yes \
+      #   -o ProxyCommand="ProxyCommand=/usr/bin/netcat -X 5 -x localhost:9998 %h %p" \
+      #   ec2-user@${TARGET}
+
+        SSH_STRING="$SSH_STRING -o ProxyCommand=\"/usr/bin/netcat -X 5 -x localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
+
+        #SSH_STRING="$SSH_STRING -o ProxyCommand=\"/usr/bin/netcat -X 5 -x localhost:9998 %h %p\""
+    else
+      # This version uses nmap-ncat. Broken in initial Fedora 35 packages
+      # ssh -i $SSH_FILENAME \
+      #   -o IdentitiesOnly=yes \
+      #   -o ProxyCommand="ncat --proxy-type=\"socks4\" --proxy localhost:9998 %h %p" \
+      #   ec2-user@${TARGET}
+
+        # Modify this to use socks5 when it works in Fedora 35 again?
+
+        SSH_STRING="$SSH_STRING -o ProxyCommand=\"ncat --proxy-type=socks4 --proxy localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
+    fi
   fi
 
+  # Last thing to do: Append remote hostname target
   SSH_STRING="$SSH_STRING $MY_REMOTE_HOSTNAME"
 
-  echo
+  print_variables_if_debug_mode "Before SSH command execution"
 
   if [[ $DEBUG == true ]]
   then
     set -x
   fi
 
-  ssh $SSH_STRING
+  eval ssh $SSH_STRING
 
   if [[ $DEBUG == true ]]
   then

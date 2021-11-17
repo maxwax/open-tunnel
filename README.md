@@ -1,37 +1,48 @@
 # open-tunnel
-This is a Bash script to easily and flexibly open an SSH tunnel through a remote bastion.
+This is a single bash script that can be used in two complimentary ways:
 
-In most cases, I just name the remote SSH bastion and easily connect:
+* When called as 'open-tunnel' it creates an SSH session on a remote bastion node and opens a tunnel to the bastion's private network resources.
+* When called as 'open-terminal' it creates an SSH session through the remote bastion's tunnel to private network resources
+
+This allows one script to construct either type of SSH connection and establish it.  It's a lot less work than having to maintain two scripts doing nearly the same thing.
+
+## How to Use
+
+First, connect to the bastion and create a tunnel:
 
 ```
 $ open-tunnel aws-east ec2-11-222-33-44.us-east-2.compute.amazonaws.com
 ```
 
-I stop my personal lab's bastions when not in use and after re-starting them the instance's public IP addresses change.
+Second, connect through the tunnel to an instance on the private side of the bastion:
 
-This script lets me re-establish a tunnel connection just by copy & pasting the bastion's new public IP address.
+```
+$ open-terminal ip-10-99-10-99.us-east-2.compute.internal
+```
 
-By loading consistent SSH parameters from config files, I can avoid retyping them or having to edit command line history.
+If you have a bastion that is always up with a static IP, you don't need open-tunnel: You could just configure the bastion with options in your $HOME/.ssh/config file.  But since my bastion's are in AWS, are they stopped and started regularly, their public DNS name changes each time. So 'open-tunnel <hostname>' lets me connect to it without updating my SSH config file.. AGAIN.
+
+## Deployment
+
+A simple install.sh script is provided to copy the script to /usr/local/bin/open-tunnel.  It also creates a symlink as /usr/local/bin/open-terminal that points to /usr/local/open-tunnel.  One script, called two different ways.
 
 ## Operation
 
-The script will read a default configuration file, $HOME/.open-tunnel-default.conf and read in my most commonly used values for tunneling.  For example, I define the SSH key of my lab's bastion here as well as my normal local port for dynamic forwarding to the bastion.
+I'm experimenting with a new config file pattern here:
 
-It will then construct an SSH command and establish a connection with tunneling to the remote host specified last on the command line.
+1. The script first reads $HOME/.open-tunnel-default.conf to load basic program defaults.  If you only have one set of configuration values for your bastion(s) configure them here and skip the need to specify them manually ever again.
+2. If you pass individual command line parameters, these will override existing variable values.
+3. If you pass a config file ID, this will load $HOME/.open-tunnel-<id>.conf and override any variables with values from the config file.
 
-The user can opt to:
+The order in which variables' values are overriden is determined by the order they are specified on the command line.
 
-* Use only a single default config file and simply name the remote host
-* Avoid using a config file at all
-* Use multiple custom config files with sets of unique parameters
-* Use individual command line parameters to constuct the SSH connection
-* Combine any of the above to meet their needs
+$ open-tunnel --config myregion --login minot
 
-This allows the possibility that common defaults could be read from the default file, then the '-c' parameter replaces some or all of those values with those from a different config file and finally individual CLI parameters replace those values.  The flexibility is there if you need it, but normally, setup a default config file, use that and just name the remote host.
+This will load all values from the $HOME/.open-tunnel-myregion.conf config file THEN override the login user as 'minot'.
 
 ## Config files
 
-The config files are snippets of bash code that is imported and executed inline with the main script.
+The config files are just bash code that is imported and executed.  Theoretically you can execute any bash code, but normally you're just setting variables here.
 
 A typical config file simply sets one or more values like this:
 
@@ -54,55 +65,76 @@ Users may also use the '--config' parameter to import a custom config file by pr
 ### Syntax
 
 ```
-open-tunnel [-c config_file_id] [-p port] [-u user] [-f forward_port] [-d] [-i identity_file] <hostname>
+open-tunnel [options] <hostname>
+open-terminal [options] <hostname>
+
+open-tunnel [--config <config_file_id>] [--port <port>] [--login <user>] [--tunnel <tunnel_port_number>] [--debug] [--identity <identity_file_name>] <remote_hostname>
 ```
 
 #### -c | --config <config_file_identifier>
 
-Import and replace SSH connection parameters values using a named custom config file.
+Override variables by loading them in from a custom config file.  
 
-The id is used to select a file in the format of $HOME/.open-tunnel-<identifier>.conf
+Specify an identifier here, not a full filename.  The id is used to select a file in the format of $HOME/.open-tunnel-<identifier>.conf
 
 Example: '-c ohio' loads $HOME/.open-tunnel-ohio.conf
 
-The config file is a Bash script doing nothing more than setting one or more variables.  See the sample file provided.
-
 #### -p | --port <port_number>
 
-Connect to the remote SSH server at this specified port.
+Connect to the remote host's SSH server at this port number.
 
-#### -u | --user <username>
+#### -l | --login <username>
 
-Connect to the remote SSH server using this login name.
+Connect to the remote host with this user name.
 
-#### -f | --forward <forward_port>
+#### -t | --tunnel <tunnel_port_number>
 
-Open this port on the LOCAL system and forward traffic received on it to the remote bastion to access the remote network's resources.
+With open-tunnel: create a tunnel on the local workstation on this port and listen for incoming traffic.
+With open-terminal: Tunnel connections through this port on the local workstation's localhost interface which tunnels it through the remote bastion to private networks.
 
 #### -i | --identity <identity_filename>
 
-Use this SSH key file in $HOME/.ssh to authenticate with the remote SSH server.
+Authenticate with the remote SSH server using this SSH key in the $HOME/.ssh directory.  This is the full filename.
 
 #### -d | --debug
 
 Enable debugging mode to report on variables and show the actual SSH command that is executed.
 
+#### --list
+
+List available config files in $HOME/.open-tunnel*.conf
+
 ### Examples
 
-Just open a connection to my favorite bastion. The default config file has the usual details.
+Quickly and easily open a connection on an AWS cloud EC2 instance acting as a bastion.  This establishes and SSH session and creates a tunnel other clients can use to go through the bastion to cloud based private network resources.
+
+Because the default config file has been configured with all the required options, I only have to specify the remote bastion name on the command line.
 
 ```
 $ open-tunnel aws-east ec2-11-222-33-44.us-east-2.compute.amazonaws.com
 ```
 
-Open a connection to an AWS instance as 'myuser' at SSH server port 8022 and open local port 9000 for tunneling traffic.
+Now I'm working in AWS ireland region and the SSH server there is on port 5022 instead of 22.  A custom config file called $HOME/.open-tunnel-ireland.conf has the name of an SSH key for my ireland instances and the MY_REMOTE_PORT variable is set to 5022.  
+
+So instead of putting that all on the command line, just override those values via the ireland config file:
 
 ```
-$ open-tunnel -u myuser -p 8022 -D 9000 aws-east ec2-11-222-33-44.us-east-2.compute.amazonaws.com
+$ open-tunnel --config ireland aws-east ec2-11-222-33-44.us-west-1.compute.amazonaws.com
 ```
 
-Open a connection to an AWS bastion using a config file with details for region Ireland and also replace the remote SSH port in the config file with 7022.
+This time lets experiment in my home lab and set all sorts of parameters manually on the command line:
 
 ```
-$ open-tunnel -c aws-ireland -p 7022 aws-east ec2-11-222-33-44.us-east-2.compute.amazonaws.com
+$ open-tunnel --login myuser --port 8022 --tunnel 9000 my-bastion-node.maxlab
+```
+
+With the first bastion example above connected, lets tunnel through it to connect to a database instance in an AWS cloud private subnet:
+```
+$ open-terminal ip-10-100-10-100.us-east-2.compute.internal
+```
+
+Lets do the same, but for a node in ireland?  All the special parameters for that region's nodes are in a config file, so just load it and go.
+
+```
+$ open-terminal --config ireland ip-10-100-10-100.us-east-2.compute.internal
 ```
