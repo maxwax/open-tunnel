@@ -1,18 +1,27 @@
 #
-# Sample config file for open-tunnel
+# Default Config file for open-tunnel
 #
 
-# Username on remote SSH server
-MY_LOGIN="ec2-user"
+# These values are loaded by open-tunnel/open-terminal and may be
+# overridden by the application of additional config file values or
+# command line parameters.
 
-# Port of remote SSH server
-MY_REMOTE_PORT=22
+# Authenticate to the remote system with this user
+export MY_LOGIN="ec2-user"
 
-# Port number on local system that dynamically forwards traffic to remote server
-MY_FORWARD_PORT=9000
+# Connect with this remote hostname or IP
+export MY_REMOTE_HOSTNAME="_null"
 
-# SSH key file used to authenticate with the remote SSH server
-MY_IDENTITY_FILE=~/.ssh/aws-useast1-maxwell.pem
+# Connect with an SSH server on this port
+export MY_REMOTE_PORT=22
 
-# Misc SSH parameters desired for this connection
-MY_SSH_PARAMETERS="-o ServerAliveCountMax=4 -o ServerAliveInterval=240 -o IdentitiesOnly=yes -o LogLevel=Verbose"
+# Create or use a proxy tunnel on this port
+export MY_PROXY_TUNNEL_PORT=9000
+
+# Hostname for remote SSH server
+export MY_IDENTITY_FILE=~/.ssh/aws-useast2-ohio.pem
+
+export MY_SSH_PARAMETERS="-o ServerAliveCountMax=4 -o ServerAliveInterval=240 -o IdentitiesOnly=yes -o LogLevel=Verbose"
+
+# When tunneling through a proxy port, use this program
+export MY_PROXY_PROGRAM="nmap-ncat"
