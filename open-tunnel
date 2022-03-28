@@ -313,27 +313,28 @@ else
       SSH_STRING="$SSH_STRING $MY_TERMINAL_SSH_PARAMETERS"
     fi
 
-    if [[ $MY_PROXY_PROGRAM == "netcat" ]]
+    # ncat from nmap-ncat is preferred, but it will fall back to BSD 'netcat'
+    if [[ $MY_PROXY_PROGRAM == "ncat" ]]
     then
-      # This version uses OpenBSD netcat, work-around for nmap-ncat issues
-      # ssh -i $SSH_FILENAME \
-      #   -o IdentitiesOnly=yes \
-      #   -o ProxyCommand="ProxyCommand=/usr/bin/netcat -X 5 -x localhost:9998 %h %p" \
-      #   ec2-user@${TARGET}
-
-        SSH_STRING="$SSH_STRING -o ProxyCommand=\"/usr/bin/netcat -X 5 -x localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
-
-        #SSH_STRING="$SSH_STRING -o ProxyCommand=\"/usr/bin/netcat -X 5 -x localhost:9998 %h %p\""
-    else
-      # This version uses nmap-ncat. Broken in initial Fedora 35 packages
+      # This version uses nmap-ncat.
       # ssh -i $SSH_FILENAME \
       #   -o IdentitiesOnly=yes \
       #   -o ProxyCommand="ncat --proxy-type=\"socks4\" --proxy localhost:9998 %h %p" \
       #   ec2-user@${TARGET}
+        SSH_STRING="$SSH_STRING -o ProxyCommand=\"ncat --proxy-type=socks5 --proxy localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
 
-        # Modify this to use socks5 when it works in Fedora 35 again?
-
-        SSH_STRING="$SSH_STRING -o ProxyCommand=\"ncat --proxy-type=socks4 --proxy localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
+    elif [[ $MY_PROXY_PROGRAM == "netcat" ]]
+    then
+        # This version uses OpenBSD netcat
+        # ssh -i $SSH_FILENAME \
+        #   -o IdentitiesOnly=yes \
+        #   -o ProxyCommand="ProxyCommand=/usr/bin/netcat -X 5 -x localhost:9998 %h %p" \
+        #   ec2-user@${TARGET}
+        SSH_STRING="$SSH_STRING -o ProxyCommand=\"/usr/bin/netcat -X 5 -x localhost:${MY_PROXY_TUNNEL_PORT} %h %p\""
+    else
+      echo "Unknown proxy program |$MY_PROXY_PROGRAM|"
+      echo "Please specify 'ncat' or 'netcat' as values."
+      exit 1
     fi
   fi
 

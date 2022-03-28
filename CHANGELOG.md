@@ -1,5 +1,11 @@
 # CHANGLOG for 'open-tunnel/open-terminal' script
 
+# 0.9.3 Select between 'ncat' and 'netcat' as proxy programs.
+
+* Stop defaulting to netcat and falling back to ncat for any other value.
+* Default to using 'ncat' and provide 'netcat' as an option'
+* Report an error if the user provides any other values
+
 # 0.9.2 Change default tunnel proxy from 'ncat-nmap' to 'ncat'
 
 * If the user specifies 'ncat' use the nc/ncat program from the nmap-ncat package.  This was previously set to ncat-nmap, which an accidentally flipping of the package name and is confusing.
