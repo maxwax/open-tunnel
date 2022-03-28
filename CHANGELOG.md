@@ -1,5 +1,9 @@
 # CHANGLOG for 'open-tunnel/open-terminal' script
 
+# 0.9.2 Change default tunnel proxy from 'ncat-nmap' to 'ncat'
+
+* If the user specifies 'ncat' use the nc/ncat program from the nmap-ncat package.  This was previously set to ncat-nmap, which an accidentally flipping of the package name and is confusing.
+
 ## 0.9.1 Reworked as open-tunnel/tunnel-terminal
 
 * Renaming open-tunnel as tunnel-terminal because open-terminal sounds universal and this script is really only for establishing SSH connections *through a tunnel*

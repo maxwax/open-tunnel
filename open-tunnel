@@ -136,7 +136,7 @@ export MY_REMOTE_PORT=22
 export MY_PROXY_TUNNEL_PORT=9000
 export MY_IDENTITY_FILE=""
 export MY_TUNNEL_SSH_PARAMETERS=""
-export MY_PROXY_PROGRAM="ncat-nmap"
+export MY_PROXY_PROGRAM="ncat"
 
 # Are we using open-tunnel or tunnel-terminal?
 CALLED_PROGRAM=$(basename "$0")
